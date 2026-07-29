@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use Porta\Plugin\Api\AbstractToolPlugin;
+use Porta\Plugin\Api\AbstractAnalyzerPlugin;
 use Porta\Plugin\Api\PluginApi;
 use Porta\Support\AsyncProcess;
 
@@ -12,11 +12,18 @@ use Porta\Support\AsyncProcess;
  * "Lint Current File" (Ctrl+Alt+E) publishes issues as editor diagnostics
  * (inline messages, stripe, Problems panel). Persisted "Format on save" and
  * "Lint on save" settings (toggled from the palette or the plugin's settings
- * page) run either or both on save — both chains format first, then lints the
+ * page) run either or both on save — both chains format first, then lint the
  * formatted file. Binary from vendor/bin, then the PATH. Everything runs
  * asynchronously on the shared event loop.
+ *
+ * The lint half IS {@see AbstractAnalyzerPlugin}'s run, so this extends it and
+ * supplies the three per-tool facts below. It registers its own commands rather
+ * than calling `registerAnalysis()`: mago has two verbs and two toggles, and its
+ * ids and labels are user-visible palette entries. The format→lint chain holds
+ * ONE single-flight slot across both processes, which is what `analyseWith()`
+ * exists for.
  */
-return new class('mago', 'mago') extends AbstractToolPlugin {
+return new class('mago', 'mago') extends AbstractAnalyzerPlugin {
     public function activate(PluginApi $api): void
     {
         $this->registerBinarySetting($api, [['composer', 'carthage-software/mago']]);
@@ -41,7 +48,7 @@ return new class('mago', 'mago') extends AbstractToolPlugin {
             function () use ($api): void {
                 $file = $this->activeFileOrFlash($api);
                 if (null !== $file) {
-                    $this->lint($api, $file);
+                    $this->analyse($api, $file);
                 }
             },
             ['ctrl+alt+e'],
@@ -65,11 +72,46 @@ return new class('mago', 'mago') extends AbstractToolPlugin {
             if ($format) {
                 $this->format($api, $path, andLint: $lint);
             } elseif ($lint) {
-                $this->lint($api, $path);
+                $this->analyse($api, $path);
             }
         });
     }
 
+    protected function command(string $binary, string $file): array
+    {
+        return [$binary, 'lint', '--reporting-format=json', $file];
+    }
+
+    /**
+     * Mago exits 0 with an unparseable report on some failures, so the exit code
+     * alone can never mean "success" here — the JSON parse is the only gate, and
+     * a report that decodes is trusted whatever the code was.
+     */
+    protected function acceptsExitCode(int $code): bool
+    {
+        return true;
+    }
+
+    protected function diagnostics(array $report): array
+    {
+        $diagnostics = [];
+        foreach ($report['issues'] ?? [] as $issue) {
+            $diagnostics[] = [
+                'line' => $this->primaryLine($issue),
+                'message' => trim(($issue['code'] ?? 'mago').': '.($issue['message'] ?? '')),
+                'severity' => match ($issue['level'] ?? '') {
+                    'Error' => 1,
+                    'Warning' => 2,
+                    'Note' => 3,
+                    default => 4,
+                },
+            ];
+        }
+
+        return $diagnostics;
+    }
+
+    /** Format in place, then optionally lint the formatted file under the same slot. */
     private function format(PluginApi $api, string $file, bool $andLint): void
     {
         $binary = $this->acquire($api);
@@ -86,52 +128,11 @@ return new class('mago', 'mago') extends AbstractToolPlugin {
             }
             $api->flash('mago: formatted '.basename($file), 4.0);
             if ($andLint) {
-                $this->runLint($api, $binary, $file); // keeps the running flag for the chain
+                $this->analyseWith($api, $binary, $file); // keeps the slot for the chain
 
                 return;
             }
             $this->release();
-        });
-    }
-
-    private function lint(PluginApi $api, string $file): void
-    {
-        $binary = $this->acquire($api);
-        if (null !== $binary) {
-            $this->runLint($api, $binary, $file);
-        }
-    }
-
-    private function runLint(PluginApi $api, string $binary, string $file): void
-    {
-        $command = [$binary, 'lint', '--reporting-format=json', $file];
-        new AsyncProcess($command, $api->projectRoot())->start(function (int $code, string $stdout) use ($api, $file): void {
-            $this->release();
-            $report = json_decode($stdout, true);
-            if (!is_array($report)) {
-                // mago exits 0 with an unparseable report on some failures, so
-                // the code alone cannot say "success".
-                $this->flashFailure($api, $code);
-
-                return;
-            }
-
-            $diagnostics = [];
-            foreach ($report['issues'] ?? [] as $issue) {
-                $diagnostics[] = [
-                    'line' => $this->primaryLine($issue),
-                    'message' => trim(($issue['code'] ?? 'mago').': '.($issue['message'] ?? '')),
-                    'severity' => match ($issue['level'] ?? '') {
-                        'Error' => 1,
-                        'Warning' => 2,
-                        'Note' => 3,
-                        default => 4,
-                    },
-                ];
-            }
-
-            $api->setDiagnostics($file, $diagnostics);
-            $this->flashCount($api, count($diagnostics), 'issue', $file);
         });
     }
 
@@ -146,5 +147,4 @@ return new class('mago', 'mago') extends AbstractToolPlugin {
 
         return 0;
     }
-
 };
