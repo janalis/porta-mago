@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use Porta\Plugin\PluginApi;
-use Porta\Plugin\PortaPlugin;
+use Porta\Plugin\Api\PluginApi;
+use Porta\Plugin\Api\PortaPlugin;
 use Porta\Support\AsyncProcess;
 use Symfony\Component\Process\ExecutableFinder;
 
