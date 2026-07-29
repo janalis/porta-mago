@@ -2,10 +2,9 @@
 
 declare(strict_types=1);
 
+use Porta\Plugin\Api\AbstractToolPlugin;
 use Porta\Plugin\Api\PluginApi;
-use Porta\Plugin\Api\PortaPlugin;
 use Porta\Support\AsyncProcess;
-use Symfony\Component\Process\ExecutableFinder;
 
 /**
  * Mago integration, both of its faces: "Format Current File" (Ctrl+Alt+G)
@@ -17,26 +16,18 @@ use Symfony\Component\Process\ExecutableFinder;
  * formatted file. Binary from vendor/bin, then the PATH. Everything runs
  * asynchronously on the shared event loop.
  */
-return new class implements PortaPlugin {
-    private bool $running = false;
-
-    public function name(): string
-    {
-        return 'mago';
-    }
-
+return new class('mago', 'mago') extends AbstractToolPlugin {
     public function activate(PluginApi $api): void
     {
-        $api->registerSetting('binary', 'mago binary', 'text', '', hint: 'empty = vendor/bin, then PATH');
+        $this->registerBinarySetting($api, [['composer', 'carthage-software/mago']]);
         $api->registerSetting('autoFormat', 'Format on save', 'bool', false);
         $api->registerSetting('autoLint', 'Lint on save', 'bool', false);
-        $api->registerInstaller('mago', fn (): bool => null !== $this->binary($api), [['composer', 'carthage-software/mago']]);
 
         $api->registerCommand(
             'format',
             'Mago: Format Current File',
             function () use ($api): void {
-                $file = $this->phpFileOrFlash($api);
+                $file = $this->activeFileOrFlash($api);
                 if (null !== $file) {
                     $this->format($api, $file, andLint: false);
                 }
@@ -48,7 +39,7 @@ return new class implements PortaPlugin {
             'lint',
             'Mago: Lint Current File',
             function () use ($api): void {
-                $file = $this->phpFileOrFlash($api);
+                $file = $this->activeFileOrFlash($api);
                 if (null !== $file) {
                     $this->lint($api, $file);
                 }
@@ -56,19 +47,10 @@ return new class implements PortaPlugin {
             ['ctrl+alt+e'],
         );
 
-        $api->registerCommand('toggle-auto-format', 'Mago: Toggle Format on Save', static function () use ($api): void {
-            $next = !(bool) $api->setting('autoFormat');
-            $api->changeSetting('autoFormat', $next);
-            $api->flash('mago format on save: '.($next ? 'on' : 'off'));
-        });
+        $this->registerToggle($api, 'toggle-auto-format', 'Mago: Toggle Format on Save', 'autoFormat', 'mago format on save');
+        $this->registerToggle($api, 'toggle-auto-lint', 'Mago: Toggle Lint on Save', 'autoLint', 'mago lint on save');
 
-        $api->registerCommand('toggle-auto-lint', 'Mago: Toggle Lint on Save', static function () use ($api): void {
-            $next = !(bool) $api->setting('autoLint');
-            $api->changeSetting('autoLint', $next);
-            $api->flash('mago lint on save: '.($next ? 'on' : 'off'));
-        });
-
-        $usable = fn (): bool => null !== $this->binary($api);
+        $usable = $this->binaryAvailable($api);
         $api->addMenuItem('format', $usable);
         $api->addMenuItem('lint', $usable);
         $api->addMenuItem('toggle-auto-format');
@@ -88,18 +70,6 @@ return new class implements PortaPlugin {
         });
     }
 
-    private function phpFileOrFlash(PluginApi $api): ?string
-    {
-        $file = $api->activeFile();
-        if (null === $file || !str_ends_with($file, '.php')) {
-            $api->flash('mago: open a PHP file first');
-
-            return null;
-        }
-
-        return $file;
-    }
-
     private function format(PluginApi $api, string $file, bool $andLint): void
     {
         $binary = $this->acquire($api);
@@ -109,8 +79,8 @@ return new class implements PortaPlugin {
 
         new AsyncProcess([$binary, 'format', $file], $api->projectRoot())->start(function (int $code) use ($api, $file, $andLint, $binary): void {
             if (0 !== $code) {
-                $this->running = false;
-                $api->flash('mago: exited with code '.$code, 4.0);
+                $this->release();
+                $this->flashFailure($api, $code);
 
                 return;
             }
@@ -120,7 +90,7 @@ return new class implements PortaPlugin {
 
                 return;
             }
-            $this->running = false;
+            $this->release();
         });
     }
 
@@ -136,10 +106,12 @@ return new class implements PortaPlugin {
     {
         $command = [$binary, 'lint', '--reporting-format=json', $file];
         new AsyncProcess($command, $api->projectRoot())->start(function (int $code, string $stdout) use ($api, $file): void {
-            $this->running = false;
+            $this->release();
             $report = json_decode($stdout, true);
             if (!is_array($report)) {
-                $api->flash('mago: exited with code '.$code, 4.0);
+                // mago exits 0 with an unparseable report on some failures, so
+                // the code alone cannot say "success".
+                $this->flashFailure($api, $code);
 
                 return;
             }
@@ -159,12 +131,7 @@ return new class implements PortaPlugin {
             }
 
             $api->setDiagnostics($file, $diagnostics);
-            $count = count($diagnostics);
-            $api->flash(match (true) {
-                0 === $count => 'mago: no issues in '.basename($file),
-                1 === $count => 'mago: 1 issue in '.basename($file),
-                default => "mago: {$count} issues in ".basename($file),
-            }, 4.0);
+            $this->flashCount($api, count($diagnostics), 'issue', $file);
         });
     }
 
@@ -180,36 +147,4 @@ return new class implements PortaPlugin {
         return 0;
     }
 
-    /** Resolve the binary and take the single-flight slot, or flash and return null. */
-    private function acquire(PluginApi $api): ?string
-    {
-        if ($this->running) {
-            $api->flash('mago: already running');
-
-            return null;
-        }
-        $binary = $this->binary($api);
-        if (null === $binary) {
-            $api->flash('mago not found (vendor/bin or PATH)', 4.0);
-
-            return null;
-        }
-        $this->running = true;
-
-        return $binary;
-    }
-
-    private function binary(PluginApi $api): ?string
-    {
-        $configured = trim((string) $api->setting('binary'));
-        if ('' !== $configured) {
-            return $configured;
-        }
-        $local = $api->projectRoot().'/vendor/bin/mago';
-        if (is_file($local) && is_executable($local)) {
-            return $local;
-        }
-
-        return new ExecutableFinder()->find('mago');
-    }
 };
