@@ -71,6 +71,8 @@ return new class implements PortaPlugin {
         $usable = fn (): bool => null !== $this->binary($api);
         $api->addMenuItem('format', $usable);
         $api->addMenuItem('lint', $usable);
+        $api->addMenuItem('toggle-auto-format');
+        $api->addMenuItem('toggle-auto-lint');
 
         $api->onFileSaved(function (string $path) use ($api): void {
             if (!str_ends_with($path, '.php')) {
