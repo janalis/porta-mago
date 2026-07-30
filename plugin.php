@@ -71,7 +71,10 @@ return new class('mago', 'mago') extends AbstractAnalyzerPlugin {
             $lint = (bool) $api->setting('autoLint');
             if ($format) {
                 $this->format($api, $path, andLint: $lint);
-            } elseif ($lint) {
+
+                return;
+            }
+            if ($lint) {
                 $this->analyse($api, $path);
             }
         });
@@ -95,10 +98,10 @@ return new class('mago', 'mago') extends AbstractAnalyzerPlugin {
     protected function diagnostics(array $report): array
     {
         $diagnostics = [];
-        foreach ($report['issues'] ?? [] as $issue) {
+        foreach (self::rowsAt($report, 'issues') as $issue) {
             $diagnostics[] = [
                 'line' => $this->primaryLine($issue),
-                'message' => trim(($issue['code'] ?? 'mago').': '.($issue['message'] ?? '')),
+                'message' => trim((string) ($issue['code'] ?? 'mago').': '.(string) ($issue['message'] ?? '')),
                 'severity' => match ($issue['level'] ?? '') {
                     'Error' => 1,
                     'Warning' => 2,
@@ -112,6 +115,7 @@ return new class('mago', 'mago') extends AbstractAnalyzerPlugin {
     }
 
     /** Format in place, then optionally lint the formatted file under the same slot. */
+    // @mago-expect lint:no-boolean-flag-parameter -- not a mode switch: the two on-save settings are independent, and $andLint is what lets one acquired slot carry the format→lint chain
     private function format(PluginApi $api, string $file, bool $andLint): void
     {
         $binary = $this->acquire($api);
@@ -139,10 +143,13 @@ return new class('mago', 'mago') extends AbstractAnalyzerPlugin {
     /** The 0-based line of the issue's Primary annotation (mago spans are already 0-based). */
     private function primaryLine(array $issue): int
     {
-        foreach ($issue['annotations'] ?? [] as $annotation) {
-            if ('Primary' === ($annotation['kind'] ?? '')) {
-                return max(0, (int) ($annotation['span']['start']['line'] ?? 0));
+        foreach (self::rowsAt($issue, 'annotations') as $annotation) {
+            if ('Primary' !== ($annotation['kind'] ?? '')) {
+                continue;
             }
+            $start = self::arrayAt(self::arrayAt($annotation, 'span'), 'start');
+
+            return max(0, (int) ($start['line'] ?? 0));
         }
 
         return 0;
