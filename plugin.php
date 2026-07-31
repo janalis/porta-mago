@@ -8,7 +8,7 @@ use Porta\Support\AsyncProcess;
 
 /**
  * Mago integration, both of its faces: "Format Current File" (Ctrl+Alt+G)
- * rewrites in place — the filesystem poller reloads the buffer — and
+ * rewrites in place AND applies the result into the buffer (one Ctrl+Z away) — and
  * "Lint Current File" (Ctrl+Alt+E) publishes issues as editor diagnostics
  * (inline messages, stripe, Problems panel). Persisted "Format on save" and
  * "Lint on save" settings (toggled from the palette or the plugin's settings
@@ -123,13 +123,15 @@ return new class('mago', 'mago') extends AbstractAnalyzerPlugin {
             return;
         }
 
-        new AsyncProcess([$binary, 'format', $file], $api->projectRoot())->start(function (int $code) use ($api, $file, $andLint, $binary): void {
+        $before = $this->textBefore($api, $file);
+        new AsyncProcess([$binary, 'format', $file], $api->projectRoot())->start(function (int $code) use ($api, $file, $andLint, $binary, $before): void {
             if (0 !== $code) {
                 $this->release();
                 $this->flashFailure($api, $code);
 
                 return;
             }
+            $this->applyFormatted($api, $file, $before);
             $api->flash('mago: formatted '.basename($file), 4.0);
             if ($andLint) {
                 $this->analyseWith($api, $binary, $file); // keeps the slot for the chain
