@@ -124,7 +124,13 @@ return new class('mago', 'mago') extends AbstractAnalyzerPlugin {
         }
 
         $before = $this->textBefore($api, $file);
-        new AsyncProcess([$binary, 'format', $file], $api->projectRoot())->start(function (int $code) use ($api, $file, $andLint, $binary, $before): void {
+        new AsyncProcess([$binary, 'format', $file], $api->projectRoot(), timeout: AsyncProcess::INTERACTIVE_TOOL_TIMEOUT)->start(function (int $code) use (
+            $api,
+            $file,
+            $andLint,
+            $binary,
+            $before,
+        ): void {
             if (0 !== $code) {
                 $this->release();
                 $this->flashFailure($api, $code);
