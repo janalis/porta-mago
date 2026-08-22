@@ -138,7 +138,7 @@ return new class('mago', 'mago') extends AbstractAnalyzerPlugin {
                 return;
             }
             $this->applyFormatted($api, $file, $before);
-            $api->flash('mago: formatted '.basename($file), 4.0);
+            $api->flash($api->trans('%tool%: formatted %file%', ['%tool%' => $this->name(), '%file%' => basename($file)]), 4.0);
             if ($andLint) {
                 $this->analyseWith($api, $binary, $file); // keeps the slot for the chain
 
