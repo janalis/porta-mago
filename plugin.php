@@ -101,7 +101,11 @@ return new class('mago', 'mago') extends AbstractAnalyzerPlugin {
         foreach (self::rowsAt($report, 'issues') as $issue) {
             $diagnostics[] = [
                 'line' => $this->primaryLine($issue),
-                'message' => trim((string) ($issue['code'] ?? 'mago').': '.(string) ($issue['message'] ?? '')),
+                'message' => trim((string) ($issue['message'] ?? '')),
+                // The rule's own field now: the Problems panel puts it at the
+                // END of the row, where it does not stand between the reader
+                // and the sentence.
+                'code' => (string) ($issue['code'] ?? ''),
                 'severity' => match ($issue['level'] ?? '') {
                     'Error' => 1,
                     'Warning' => 2,
