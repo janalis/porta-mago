@@ -1,0 +1,26 @@
+{
+    "name": "porta/mago",
+    "description": "mago formatting and linting of the current file, or on save",
+    "type": "porta-plugin",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.5"
+    },
+    "extra": {
+        "porta": {
+            "tools": [
+                {
+                    "name": "mago",
+                    "purpose": "the formatter and linter",
+                    "setting": "binary",
+                    "sources": [
+                        [
+                            "composer",
+                            "carthage-software/mago"
+                        ]
+                    ]
+                }
+            ]
+        }
+    }
+}

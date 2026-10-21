@@ -26,7 +26,7 @@ use Porta\Support\AsyncProcess;
 return new class('mago', 'mago') extends AbstractAnalyzerPlugin {
     public function activate(PluginApi $api): void
     {
-        $this->registerBinarySetting($api, [['composer', 'carthage-software/mago']]);
+        $this->registerBinarySetting($api);
         $api->registerSetting('autoFormat', 'Format on save', 'bool', false);
         $api->registerSetting('autoLint', 'Lint on save', 'bool', false);
 
