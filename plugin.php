@@ -24,6 +24,15 @@ use Porta\Support\AsyncProcess;
  * exists for.
  */
 return new class('mago', 'mago') extends AbstractAnalyzerPlugin {
+    #[\Override]
+    protected function runsProjectCode(): bool
+    {
+        // A `mago.toml` `[extension-hosts.*] command` is a program the project
+        // names, and `mago lint` starts it — driven with a canary. Format and
+        // lint share the one gate: refuse both rather than trust a split.
+        return true;
+    }
+
     public function activate(PluginApi $api): void
     {
         $this->registerBinarySetting($api);

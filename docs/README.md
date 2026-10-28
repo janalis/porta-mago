@@ -21,6 +21,10 @@ set one, then `vendor/bin/mago`, then your `PATH`. While none of those
 resolves, its menu entries stay dimmed, and its page under **Settings →
 Plugins** offers to install it (`composer require --dev carthage-software/mago`).
 
+In a project you have not trusted, mago does not run at all: a `mago.toml` can
+name a program for `mago lint` to start (`[extension-hosts]`). See
+[Trusting a project](../../../docs/configuration.md#trusting-a-project).
+
 ## Settings
 
 | Setting | Default | What it does |
