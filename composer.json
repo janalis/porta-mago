@@ -1,5 +1,5 @@
 {
-    "name": "porta/mago",
+    "name": "janalis/porta-mago",
     "description": "mago formatting and linting of the current file, or on save",
     "type": "porta-plugin",
     "license": "MIT",
