@@ -4,6 +4,8 @@
 and this plugin offers both. Bundled with Porta and off by default — turn it
 on under **Settings → Plugins → mago**.
 
+![The mago page in Settings → Plugins](/screenshots/plugin-mago.svg)
+
 - **Mago: Format Current File** (`Ctrl+Alt+G`) formats the file and applies
   the result to the open buffer, so the whole reformat is one `Ctrl+Z` away —
   unsaved edits included.
