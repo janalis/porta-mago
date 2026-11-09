@@ -20,7 +20,11 @@
                         ]
                     ]
                 }
-            ]
+            ],
+            "store": {
+                "title": "Mago",
+                "category": "linters"
+            }
         }
     }
 }
