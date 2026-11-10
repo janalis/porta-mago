@@ -2,6 +2,8 @@
 
 mago formatting and linting of the current file, or on save.
 
+![The mago page in Settings → Plugins](https://janalis.github.io/porta/screenshots/plugin-mago.svg)
+
 This is `janalis/porta-mago`, one of the plugins bundled with
 [Porta](https://github.com/janalis/porta), the terminal IDE for PHP. Porta
 ships it already: turn it on under **Settings → Plugins**. Install this
